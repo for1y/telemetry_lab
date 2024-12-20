@@ -1,12 +1,11 @@
 import random
-
+import asyncio
 from PyQt5.QtCore import QThread, pyqtSignal, QObject
 
 import psycopg2 as pg
 import requests
 from typing import List, Tuple
 
-from PyQt5.QtCore import QTimer
 
 """GLOBAL VARIABLES"""
 host = '192.168.2.134'
@@ -18,45 +17,14 @@ host_quad = '192.168.2.143'
 port_quad = '5007'
 
 
-class CoordinateUpdater(QThread):
-    coordinates_updated = pyqtSignal(list)  # Сигнал для передачи обновленных координат
-
-    def __init__(self, copter_controller):
-        super().__init__()
-        self.copter_controller = copter_controller
-        self.running = True  # Флаг для управления потоком
-
-    def run(self):
-        while self.running:
-            coords = self.copter_controller._get_cords()  # Получение новых координат
-            self.coordinates_updated.emit(coords)  # Генерация сигнала
-            self.msleep(1000)  # Интервал обновления 1 секунда
-
-    def stop(self):
-        self.running = False
-        self.wait()  # Ожидаем завершения потока
-
-
 class CopterController(QObject):
-    def __init__(self):
+    def __init__(self, update_interval = 1000):
+        self.update_interval = update_interval
         # Координаты
-        self.cords = [0.0, 0.0, 0.0]
-        self.updater = CoordinateUpdater(self)  # Создаем экземпляр обновляющего потока
-        self.updater.coordinates_updated.connect(self._update_coords)
-        self.updater.start()  # Запускаем поток
+        self.cords = self._get_cords()
         #
         self.api_url = f"http://{host_quad}:{port_quad}"
 
-        # Таймер для обновления координат каждую секунду
-
-    def _update_coords(self, cords):
-        """Слот для получения обновленных координат от потока."""
-        self.cords = cords
-        self.coordinates_updated.emit(self.cords)  # Извещаем внешние компоненты
-
-    def stop_updater(self):
-        """Остановка потока."""
-        self.updater.stop()
 
     def set_target_position(self, cords: List[float]) -> None:
         payload = {'target_position': cords}
@@ -75,11 +43,11 @@ class CopterController(QObject):
             print(f'[FAILURE] block_swiching {block}')
 
     def get_copter_telemetry(self, count_of_records):
-        data = self.data_from_database('realtime_telemetry', count_of_records)
+        data = data_from_database('realtime_telemetry', count_of_records)
         return data
 
     def _get_cords(self):
-        data = self.data_from_database('realtime_telemetry', 1)
+        data = data_from_database('realtime_telemetry', 1)
         return data[0][2:5]
 
 
@@ -109,32 +77,33 @@ class CopterController(QObject):
         for row in data[1:]:
             print(format_string.format(*row))
 
-    def data_from_database(self, table_name, count_of_records=50):
-        # with pg.connect(
-        #         dbname=dbname,
-        #         user=username,
-        #         password=password,
-        #         host=host,
-        #         port=port) as connect:
-        #     cursor = connect.cursor()
-        #     cursor.execute(f"""SELECT * FROM {table_name} ORDER BY id DESC LIMIT {count_of_records}""")
-        #     data = cursor.fetchall()
 
-        # имитация данных
-        data = [
-            [
-                random.randint(1, 10),
-                _,
-                random.randint(-25000, 25000) / 1000.0,
-                random.randint(-25000, 25000) / 1000.0,
-                random.randint(-25000, 25000) / 1000.0,
-                random.randint(-25000, 25000) / 1000.0,
-                random.randint(-25000, 25000) / 1000.0,
-                random.randint(-25000, 25000) / 1000.0
-            ]
-            for _ in range(count_of_records)  # Обратить внимание на range()
+def data_from_database(table_name, count_of_records=50):
+    # with pg.connect(
+    #         dbname=dbname,
+    #         user=username,
+    #         password=password,
+    #         host=host,
+    #         port=port) as connect:
+    #     cursor = connect.cursor()
+    #     cursor.execute(f"""SELECT * FROM {table_name} ORDER BY id DESC LIMIT {count_of_records}""")
+    #     data = cursor.fetchall()
+
+    # имитация данных
+    data = [
+        [
+            random.randint(1, 10),
+            _,
+            random.randint(-25000, 25000) / 1000.0,
+            random.randint(-25000, 25000) / 1000.0,
+            random.randint(-25000, 25000) / 1000.0,
+            random.randint(-25000, 25000) / 1000.0,
+            random.randint(-25000, 25000) / 1000.0,
+            random.randint(-25000, 25000) / 1000.0
         ]
-        return data
+        for _ in range(count_of_records)  # Обратить внимание на range()
+    ]
+    return data
 
 
 # # Инициализация глобальной переменной коптера

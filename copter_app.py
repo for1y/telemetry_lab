@@ -64,7 +64,7 @@ class CopterApp(QMainWindow, Ui_MainWindow):
         # Настраиваем таймер для обновления положения коптера
         self.timer = QTimer()
         self.timer.timeout.connect(self.draw_copter)
-        self.timer.start(200)  # Обновление каждые 200 мс (5 раз в секунду)
+        self.timer.start(3000)  # Обновление каждые 200 мс (5 раз в секунду)
 
         # self.scene.setSceneRect()
         self.draw_grid(int(self.cords_to_scene(1)), int(self.cords_to_scene(5)))
@@ -229,7 +229,7 @@ class CopterApp(QMainWindow, Ui_MainWindow):
                     min_distance = distance
                     nearest_point = point
 
-        return min_distance, nearest_point
+        return self.scene_to_cords(min_distance), nearest_point
 
     def update_distance_visualization(self):
         """Обновляет отображение линии и текста расстояния до ближайшей зоны."""
@@ -255,7 +255,7 @@ class CopterApp(QMainWindow, Ui_MainWindow):
             if self.distance_line:
                 self.scene.removeItem(self.distance_line)
             self.distance_line = self.scene.addLine(copter_pos[0], copter_pos[1],
-                                                    nearest_point[0], nearest_point[1],
+                                                    nearest_point.x(), nearest_point.y(),
                                                     QPen(QColor(255, 0, 0), 2))
 
             # Обновляем или создаем текст расстояния
@@ -278,7 +278,7 @@ class CopterApp(QMainWindow, Ui_MainWindow):
         return int(scene_cord * float(cord_graph) / scene_size)
 
     def draw_copter(self):
-        cords = self.copter_controller.cords
+        cords = self.copter_controller._get_cords()
         # self.copter_on_scene.setPos(cords[0], cords[1])
         # coords_text = f"(x:{cords[0]:.3f}, y:{cords[1]:.3f}, x:{cords[2]:.3f})"
         self.pixmap_item.setPos(self.cords_to_scene(cords[0]), self.cords_to_scene(cords[1]))
