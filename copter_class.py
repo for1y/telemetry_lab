@@ -1,11 +1,11 @@
 import random
 import asyncio
-from PyQt5.QtCore import QThread, pyqtSignal, QObject
-
+from PyQt5.QtCore import QThread, pyqtSignal, QObject, QTimer
+import threading
+import time
 import psycopg2 as pg
 import requests
 from typing import List, Tuple
-
 
 """GLOBAL VARIABLES"""
 host = '192.168.2.134'
@@ -17,19 +17,40 @@ host_quad = '192.168.2.143'
 port_quad = '5007'
 
 
+
 class CopterController(QObject):
-    def __init__(self, update_interval = 1000):
+    cords = []
+    def __init__(self, update_interval=1000):
         self.update_interval = update_interval
         # Координаты
         self.cords = self._get_cords()
         #
+        self.running = True
+        # Поток, связанный с этим объектом
+        self.update_thread = threading.Thread(target=self.update_copter_cords)
+        self.update_thread.start()
+        #
         self.api_url = f"http://{host_quad}:{port_quad}"
 
+    def update_copter_cords(self):
+        while self.running:
+            cords = data_from_database('realtime_telemetry', 1)[0][2:5]
+            print(f'drone move to {cords}')
+            self.cords = cords
+            time.sleep(4)
+
+
+
+    def ty(self):
+        print("ffrfrfr")
 
     def set_target_position(self, cords: List[float]) -> None:
         payload = {'target_position': cords}
-        response = requests.post(f"{self.api_url}/target_position", json=payload)
-        if response.status_code == 200:
+
+        # response = requests.post(f"{self.api_url}/target_position", json=payload)
+        response_imitation = True
+        # if response.status_code == 200:
+        if response_imitation:
             print(f'[SUCCESS] set_target_position {cords}')
         else:
             print(f'[FAILURE] set_target_position {cords}')
@@ -49,7 +70,6 @@ class CopterController(QObject):
     def _get_cords(self):
         data = data_from_database('realtime_telemetry', 1)
         return data[0][2:5]
-
 
     def show_telemetry(self, count_of_records=1):
         data = self.get_copter_telemetry(count_of_records)
@@ -105,7 +125,4 @@ def data_from_database(table_name, count_of_records=50):
     ]
     return data
 
-
-# # Инициализация глобальной переменной коптера
-# global copter
-# copter = CopterController()
+# Инициализация глобальной переменной коптера

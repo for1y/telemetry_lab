@@ -2,7 +2,7 @@ from PyQt5.QtWidgets import QMainWindow, QGraphicsScene, QGraphicsTextItem, QGra
     QMenu
 from PyQt5.QtGui import QPen, QColor, QPixmap, QCursor, QPolygonF, QTransform, QBrush
 from PyQt5.QtCore import Qt, QTimer
-
+from PyQt5 import QtGui
 from copter_class import CopterController #, copter
 
 from interface import Ui_MainWindow
@@ -14,12 +14,10 @@ scene_size = 200
 
 
 
-
-
 class CopterApp(QMainWindow, Ui_MainWindow):
+    copter_controller = CopterController()
     def __init__(self):
 
-        self.copter_controller = CopterController()
 
         self.is_setting_route = False
         self.is_setting_zone_mode = False
@@ -39,6 +37,7 @@ class CopterApp(QMainWindow, Ui_MainWindow):
         # -------------------------------
         self.scene = QGraphicsScene()
         self.graphicsView.setScene(self.scene)
+        self.graphicsView.setRenderHints(QtGui.QPainter.Antialiasing | QtGui.QPainter.SmoothPixmapTransform)
         self.graphicsView.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         # Установка фильтра событий
         self.graphicsView.viewport().installEventFilter(self)
@@ -47,11 +46,11 @@ class CopterApp(QMainWindow, Ui_MainWindow):
         # Рисуем коптер и делаем так, чтобы координаты его были в центре
         copter_image = QPixmap('image_folder/copter.png').scaled(25, 25)
         self.pixmap_item = QGraphicsPixmapItem(copter_image)
-        x, y = copter_image.width() / 2, copter_image.width() / 2
+        x, y = int(copter_image.width() / 2), int(copter_image.width() / 2)
         self.pixmap_item.setTransformOriginPoint(x, y)
         # self.copter_on_scene = self.scene.addPixmap(copter_image)
         self.scene.addItem(self.pixmap_item)
-        self.pixmap_item.setVisible(False)
+        self.pixmap_item.setVisible(True)
         self.pixmap_item.setPos(0, 0)
 
         # Привязываем чекбоксы
@@ -64,10 +63,14 @@ class CopterApp(QMainWindow, Ui_MainWindow):
         # Настраиваем таймер для обновления положения коптера
         self.timer = QTimer()
         self.timer.timeout.connect(self.draw_copter)
-        self.timer.start(3000)  # Обновление каждые 200 мс (5 раз в секунду)
+        self.timer.start(2000)  # Обновление каждые 200 мс (5 раз в секунду)
 
         # self.scene.setSceneRect()
         self.draw_grid(int(self.cords_to_scene(1)), int(self.cords_to_scene(5)))
+
+    def gt(self):
+        copter_controller = CopterController()
+        copter_controller.update_copter_cords()
 
     def enable_set_zone_mode(self):
         """Включаем режим установки зоны и меняем курсор."""
@@ -92,7 +95,9 @@ class CopterApp(QMainWindow, Ui_MainWindow):
             if event.type() == event.MouseButtonPress:
                 if event.button() == Qt.LeftButton:
                     scene_pos = self.graphicsView.mapToScene(event.pos())
-
+                    x, y = self.scene_to_cords(scene_pos.x()), self.scene_to_cords(scene_pos.y())
+                    z = self.copter_controller.cords[2]
+                    self.copter_controller.set_target_position([x, y, z])
                     self.is_setting_route = False
                     self.graphicsView.setCursor(QCursor(Qt.ArrowCursor))
                     self.graphicsView.viewport().update()
@@ -214,20 +219,21 @@ class CopterApp(QMainWindow, Ui_MainWindow):
                 self.scene.removeItem(self.distance_text)
                 self.distance_text = None
 
-    def calculate_distance_to_zone(self, copter_coords):
+    def calculate_distance_to_zone(self, copter_coords)->float:
         """Вычисляет расстояние от коптера до ближайшей зоны."""
         min_distance = float('inf')
         nearest_point = None
 
         # Перебираем все объекты QGraphicsPolygonItem
-        for polygon_item in self.restricted_zone_polygons:
-            polygon = polygon_item.polygon()  # Получаем QPolygonF из объекта
-            for i in range(polygon.count()):
-                point = polygon.at(i)  # Получаем точку из полигона
-                distance = ((copter_coords[0] - point.x()) ** 2 + (copter_coords[1] - point.y()) ** 2) ** 0.5
-                if distance < min_distance:
-                    min_distance = distance
-                    nearest_point = point
+        if self.restricted_zone_polygons:
+            for polygon_item in self.restricted_zone_polygons:
+                polygon = polygon_item.polygon()  # Получаем QPolygonF из объекта
+                for i in range(polygon.count()):
+                    point = polygon.at(i)  # Получаем точку из полигона
+                    distance = ((copter_coords[0] - point.x()) ** 2 + (copter_coords[1] - point.y()) ** 2) ** 0.5
+                    if distance < min_distance:
+                        min_distance = distance
+                        nearest_point = point
 
         return self.scene_to_cords(min_distance), nearest_point
 
@@ -274,16 +280,18 @@ class CopterApp(QMainWindow, Ui_MainWindow):
     def cords_to_scene(self, cord):
         return int(cord * scene_size / float(cord_graph))
 
-    def scene_to_cords(self, scene_cord):
-        return int(scene_cord * float(cord_graph) / scene_size)
+    def scene_to_cords(self, scene_cord) -> float:
+        if scene_cord != 'inf':
+            return int(scene_cord * float(cord_graph) / scene_size)
+        return float('inf')
 
     def draw_copter(self):
-        cords = self.copter_controller._get_cords()
-        # self.copter_on_scene.setPos(cords[0], cords[1])
-        # coords_text = f"(x:{cords[0]:.3f}, y:{cords[1]:.3f}, x:{cords[2]:.3f})"
+        if self.checkBox_showCopter.isChecked():
+            print('draw')
+        cords = self.copter_controller.cords
+
         self.pixmap_item.setPos(self.cords_to_scene(cords[0]), self.cords_to_scene(cords[1]))
-#         print(coords_text)
-        # self.pixmap_item.setPos(0, 0)
+
         self.update_distance_visualization()
 
     def draw_grid(self, spacing=25, major_spacing=100):
@@ -341,8 +349,3 @@ class CopterApp(QMainWindow, Ui_MainWindow):
         self.scene.addLine(0, y_max, -arrow_size / 2, y_max - arrow_size, pen_axes)  # Левая линия стрелки
         self.scene.addLine(0, y_max, arrow_size / 2, y_max - arrow_size, pen_axes)  # Правая линия стрелки
 
-# if __name__ == "__main__":
-#     app = QApplication([])
-#     window = DroneApp()
-#     window.show()
-#     app.exec_()

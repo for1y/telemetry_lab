@@ -5,7 +5,7 @@
       <excludeFolder url="file://$MODULE_DIR$/VirtialEnv" />
       <excludeFolder url="file://$MODULE_DIR$/VirtualEnv" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.9 (lab_tel_new)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.11 (lab3_copter_stepanov)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>
