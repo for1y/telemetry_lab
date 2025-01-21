@@ -1,23 +1,20 @@
 from PyQt5.QtWidgets import QMainWindow, QGraphicsScene, QGraphicsTextItem, QGraphicsPixmapItem, QGraphicsPolygonItem, \
-    QMenu
+    QMenu, QMessageBox, QInputDialog
 from PyQt5.QtGui import QPen, QColor, QPixmap, QCursor, QPolygonF, QTransform, QBrush
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, QPointF
 from PyQt5 import QtGui
-from copter_class import CopterController #, copter
-
+from copter_class import CopterController  # , copter
+from math import atan2, degrees
 from interface import Ui_MainWindow
-
-
 
 cord_graph = 25
 scene_size = 200
-
-
+danger_zone_threshold = 10
 
 class CopterApp(QMainWindow, Ui_MainWindow):
     copter_controller = CopterController()
-    def __init__(self):
 
+    def __init__(self):
 
         self.is_setting_route = False
         self.is_setting_zone_mode = False
@@ -57,6 +54,10 @@ class CopterApp(QMainWindow, Ui_MainWindow):
         self.checkBox_showCopter.stateChanged.connect(self.on_checkBox_showCopter)
         self.checkBox_showRestrictedZone.stateChanged.connect(self.on_checkBox_showRestrictedZone)
         self.checkBox_showDistance.stateChanged.connect(self.on_checkBox_showDistance)
+
+        self.checkBox_Warning.stateChanged.connect(self.on_checkBox_Warning)
+
+        self.checkBox_stopInZone.stateChanged.connect(self.on_checkBox_stopInZone)
         # Привязываем кнопки
         self.toolButton_setRestrictedZone.clicked.connect(self.enable_set_zone_mode)
         self.toolButton_setRoute.clicked.connect(self.set_route_to_copter)
@@ -64,6 +65,13 @@ class CopterApp(QMainWindow, Ui_MainWindow):
         self.timer = QTimer()
         self.timer.timeout.connect(self.draw_copter)
         self.timer.start(2000)  # Обновление каждые 200 мс (5 раз в секунду)
+
+        # Настраиваем таймер для ожидания попадания в запретную зону
+        self.warning_timer = QTimer()
+        self.warning_timer.timeout.connect(self.follow_to_zone)
+
+        self.stopInZone_timer = QTimer()
+        self.stopInZone_timer.timeout.connect(self.stopInZone)
 
         # self.scene.setSceneRect()
         self.draw_grid(int(self.cords_to_scene(1)), int(self.cords_to_scene(5)))
@@ -219,8 +227,82 @@ class CopterApp(QMainWindow, Ui_MainWindow):
                 self.scene.removeItem(self.distance_text)
                 self.distance_text = None
 
-    def calculate_distance_to_zone(self, copter_coords)->float:
-        """Вычисляет расстояние от коптера до ближайшей зоны."""
+    def on_checkBox_Warning(self, state):
+        if state == Qt.Checked:
+            self.warning_timer.start(2000)
+        else:
+            self.warning_timer.stop()
+
+    def on_checkBox_stopInZone(self, state):
+        if state == Qt.Checked:
+            self.stopInZone_timer.start(2000)
+        else:
+            self.stopInZone_timer.stop()
+
+    def stopInZone(self):
+        """Проверяет, находится ли коптер внутри запретной зоны, и запрашивает новую высоту."""
+        copter_coords = self.copter_controller.cords  # Получаем текущие координаты коптера
+        current_x, current_y, current_z = copter_coords
+
+        for polygon_item in self.restricted_zone_polygons:
+            polygon = polygon_item.polygon()  # Получаем QPolygonF из объекта
+            if polygon.containsPoint(QPointF(current_x, current_y), Qt.OddEvenFill):
+                # Коптер находится в запретной зоне
+                self.warning_and_set_height(current_z)
+                break
+
+    def warning_and_set_height(self, current_z):
+        """Выводит предупреждающее окно и запрашивает новую высоту."""
+        # Предупреждающее окно
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        msg.setWindowTitle("Предупреждение")
+        msg.setText("Коптер находится в запретной зоне!")
+        msg.setInformativeText(f"Текущая высота: {current_z:.2f} м. Пожалуйста, задайте новую высоту.")
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec_()
+
+        # Запрос новой высоты
+        new_height, ok = QInputDialog.getDouble(
+            self,
+            "Задать новую высоту",
+            "Введите новую высоту (м):",
+            decimals=2,
+            min=0.0,  # Минимальная высота
+            max=1000.0  # Максимальная высота
+        )
+        if ok:
+            # Применяем новую высоту
+            self.copter_controller.set_target_position([current_z, new_height, current_z])
+            print(f"Установлена новая высота: {new_height:.2f} м")
+
+
+    def follow_to_zone(self):
+        """Проверяет расстояние до ближайшей зоны и выводит предупреждение, если нужно."""
+        # Получаем координаты коптера
+        copter_coords = self.copter_controller.cords
+
+        # Вычисляем расстояние до ближайшей зоны
+
+        if self.nearest_point and self.distance_to_danger_zone < danger_zone_threshold:
+            # Рассчитываем направление в градусах (от коптера до ближайшей точки)
+            delta_x = self.nearest_point[0] - copter_coords[0]
+            delta_y = self.nearest_point[1] - copter_coords[1]
+            angle = degrees(atan2(delta_y, delta_x))  # Угол в градусах
+            if angle < 0:
+                angle += 360  # Приводим угол к диапазону 0-360
+
+            # Создаем всплывающее окно
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Warning)
+            msg.setWindowTitle("Предупреждение")
+            msg.setText("Коптер приближается к запретной зоне!")
+            msg.setInformativeText(f"Расстояние: {self.distance_to_danger_zone:.3f} м\nНаправление: {angle:.2f}°")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec_()
+
+    def calculate_distance_to_zone(self, copter_coords) -> float:
+        """Вычисляет минимальное расстояние от коптера до ближайшей зоны."""
         min_distance = float('inf')
         nearest_point = None
 
@@ -228,14 +310,48 @@ class CopterApp(QMainWindow, Ui_MainWindow):
         if self.restricted_zone_polygons:
             for polygon_item in self.restricted_zone_polygons:
                 polygon = polygon_item.polygon()  # Получаем QPolygonF из объекта
+
+                # Перебираем стороны полигона
                 for i in range(polygon.count()):
-                    point = polygon.at(i)  # Получаем точку из полигона
-                    distance = ((copter_coords[0] - point.x()) ** 2 + (copter_coords[1] - point.y()) ** 2) ** 0.5
+                    p1 = polygon.at(i)
+                    p2 = polygon.at((i + 1) % polygon.count())  # Следующая вершина (замкнутый контур)
+
+                    # Вычисляем расстояние от точки до текущего отрезка
+                    distance, closest_point = self._point_to_segment_distance(copter_coords, (p1.x(), p1.y()),
+                                                                              (p2.x(), p2.y()))
+
+                    # print(distance, ' main')
                     if distance < min_distance:
                         min_distance = distance
-                        nearest_point = point
+                        nearest_point = closest_point
+        return min_distance, nearest_point
 
-        return self.scene_to_cords(min_distance), nearest_point
+    def _point_to_segment_distance(self, point, segment_start, segment_end):
+        """Вычисляет расстояние от точки до отрезка и ближайшую точку на отрезке."""
+        px, py = point
+        x1, y1 = segment_start
+        x2, y2 = segment_end
+
+        # Вектор отрезка
+        dx, dy = x2 - x1, y2 - y1
+
+        # Длина отрезка в квадрате
+        segment_length_squared = dx ** 2 + dy ** 2
+        if segment_length_squared == 0:  # Отрезок вырождается в точку
+            return ((px - x1) ** 2 + (py - y1) ** 2) ** 0.5, (x1, y1)
+
+        # Проекция точки на прямую, содержащую отрезок, с нормализацией
+        t = max(0, min(1, ((px - x1) * dx + (py - y1) * dy) / segment_length_squared))
+
+        # Координаты ближайшей точки на отрезке
+        closest_x = x1 + t * dx
+        closest_y = y1 + t * dy
+
+        # Расстояние от точки до ближайшей точки на отрезке
+        distance: float = ((px - closest_x) ** 2 + (py - closest_y) ** 2) ** 0.5
+        distance = distance * cord_graph / scene_size
+        # print(distance, ' +')
+        return (distance), (closest_x, closest_y)
 
     def update_distance_visualization(self):
         """Обновляет отображение линии и текста расстояния до ближайшей зоны."""
@@ -254,34 +370,35 @@ class CopterApp(QMainWindow, Ui_MainWindow):
         copter_pos = [self.cords_to_scene(copter_coords[0]), self.cords_to_scene(copter_coords[1])]
 
         # Вычисляем расстояние до ближайшей зоны
-        distance, nearest_point = self.calculate_distance_to_zone(copter_pos)
+        self.distance_to_danger_zone, nearest_point = self.calculate_distance_to_zone(copter_pos)
 
         if nearest_point:
+            self.nearest_point = nearest_point
             # Обновляем или создаем линию
             if self.distance_line:
                 self.scene.removeItem(self.distance_line)
             self.distance_line = self.scene.addLine(copter_pos[0], copter_pos[1],
-                                                    nearest_point.x(), nearest_point.y(),
+                                                    self.nearest_point[0], self.nearest_point[1],
                                                     QPen(QColor(255, 0, 0), 2))
 
             # Обновляем или создаем текст расстояния
             if self.distance_text:
                 self.scene.removeItem(self.distance_text)
-            self.distance_text = QGraphicsTextItem(f"{distance:.2f} m")
+            self.distance_text = QGraphicsTextItem(f"{self.distance_to_danger_zone:.2f} m")
             self.distance_text.setDefaultTextColor(QColor(255, 0, 0))
-            self.distance_text.setPos((copter_pos[0] + nearest_point.x()) / 2,
-                                      (copter_pos[1] + nearest_point.y()) / 2)
+            self.distance_text.setPos((copter_pos[0] + self.nearest_point[0]) / 2,
+                                      (copter_pos[1] + self.nearest_point[1]) / 2)
             self.scene.addItem(self.distance_text)
 
     def set_route_to_copter(self):
         self.is_setting_route = True
         self.graphicsView.setCursor(QCursor(Qt.CrossCursor))
 
-    def cords_to_scene(self, cord):
+    def cords_to_scene(self, cord) -> int:
         return int(cord * scene_size / float(cord_graph))
 
     def scene_to_cords(self, scene_cord) -> float:
-        if scene_cord != 'inf':
+        if scene_cord != float('inf'):
             return int(scene_cord * float(cord_graph) / scene_size)
         return float('inf')
 
@@ -348,4 +465,3 @@ class CopterApp(QMainWindow, Ui_MainWindow):
         # Стрелка вверх
         self.scene.addLine(0, y_max, -arrow_size / 2, y_max - arrow_size, pen_axes)  # Левая линия стрелки
         self.scene.addLine(0, y_max, arrow_size / 2, y_max - arrow_size, pen_axes)  # Правая линия стрелки
-

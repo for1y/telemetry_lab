@@ -37,12 +37,7 @@ class CopterController(QObject):
             cords = data_from_database('realtime_telemetry', 1)[0][2:5]
             print(f'drone move to {cords}')
             self.cords = cords
-            time.sleep(4)
-
-
-
-    def ty(self):
-        print("ffrfrfr")
+            time.sleep(2)
 
     def set_target_position(self, cords: List[float]) -> None:
         payload = {'target_position': cords}
