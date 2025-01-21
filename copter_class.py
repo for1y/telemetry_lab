@@ -38,7 +38,7 @@ class CopterController():
             cords = data_from_database('realtime_telemetry', 1)[0][2:5]
 
             self.cords = cords
-            glogger.info(f'Copter update cordinates on {cords}')
+            glogger.drone_moves(f'Copter update cordinates on {cords}')
             time.sleep(2)
 
     def set_target_position(self, cords: List[float]) -> None:
@@ -48,7 +48,7 @@ class CopterController():
         response_imitation = True
         # if response.status_code == 200:
         if response_imitation:
-            glogger.info(f'set_target_position {cords} [SUCCESS]')
+            glogger.operator_actions(f'set_target_position {cords} [SUCCESS]')
             print(f'[SUCCESS] set_target_position {cords}')
         else:
             glogger.error(f'set_target_position {cords} [FAILURE]')
@@ -60,10 +60,10 @@ class CopterController():
         response_imitation = True
         # if response.status_code == 200:
         if response_imitation:
-            self.logger.info(f'block_swiching {block} [SUCCESS]')
+            glogger.operator_actions(f'block_swiching {block} [SUCCESS]')
             print(f'[SUCCESS] block_swiching {block}')
         else:
-            self.logger.error(f'block_swiching {block} [FAILURE]')
+            glogger.error(f'block_swiching {block} [FAILURE]')
             print(f'[FAILURE] block_swiching {block}')
 
     def get_copter_telemetry(self, count_of_records):

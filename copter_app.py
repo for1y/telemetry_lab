@@ -1,14 +1,12 @@
-from math import atan2, degrees
-
 from PyQt5 import QtGui
 from PyQt5.QtCore import Qt, QTimer, QPointF
 from PyQt5.QtGui import QPen, QColor, QPixmap, QCursor, QPolygonF, QTransform, QBrush
 from PyQt5.QtWidgets import QMainWindow, QGraphicsScene, QGraphicsTextItem, QGraphicsPixmapItem, QGraphicsPolygonItem, \
     QMenu, QMessageBox, QInputDialog
+from math import atan2, degrees
 
 from copter_class import CopterController
 from interface import Ui_MainWindow
-
 from my_logger import logger as glogger
 
 cord_graph = 25
@@ -59,10 +57,13 @@ class CopterApp(QMainWindow, Ui_MainWindow):
         self.checkBox_showCopter.stateChanged.connect(self.on_checkBox_showCopter)
         self.checkBox_showRestrictedZone.stateChanged.connect(self.on_checkBox_showRestrictedZone)
         self.checkBox_showDistance.stateChanged.connect(self.on_checkBox_showDistance)
-
         self.checkBox_Warning.stateChanged.connect(self.on_checkBox_Warning)
-
         self.checkBox_stopInZone.stateChanged.connect(self.on_checkBox_stopInZone)
+        #
+        self.checkBox_droneMoves.stateChanged.connect(self.show_log_droneMoves)
+        self.checkBox_alarmsTriggers.stateChanged.connect(self.show_log_checkBox_alarmsTriggers)
+        self.checkBox_operatorActions.stateChanged.connect(self.show_log_checkBox_operatorActions)
+        self.checkBox_goalMessages.stateChanged.connect(self.show_log_checkBox_goalMessages)
 
         # Привязываем кнопки
         self.toolButton_setRestrictedZone.clicked.connect(self.enable_set_zone_mode)
@@ -83,7 +84,44 @@ class CopterApp(QMainWindow, Ui_MainWindow):
         # self.scene.setSceneRect()
         self.draw_grid(int(self.cords_to_scene(1)), int(self.cords_to_scene(5)))
 
+        self.log_refresher_timer = QTimer()
+        self.log_refresher_timer.timeout.connect(self.log_refresher)
+        self.log_refresher_timer.start(2000)
 
+    def log_refresher(self):
+        with open('log.txt', 'r') as file:
+            data = file.read().strip('\n')
+            print(data)
+            filter: list[str] = []
+            if not self.checkBox_droneMoves.isChecked():
+                filter.append('[DRONE MOVES]')
+            if not self.checkBox_alarmsTriggers.isChecked():
+                filter.append('[ALARMS AND TRIGGERS]')
+            if not self.checkBox_operatorActions.isChecked():
+                filter.append('[OPERATOR ACTIONS]')
+            if not self.checkBox_goalMessages.isChecked():
+                filter.append('[ANY]')
+            for dat in data:
+                for f in filter:
+                    if f in dat:
+                        data.remove(f)
+                        continue
+
+
+            self.plainTextEdit.clear()
+            self.plainTextEdit.appendPlainText(data)
+
+    def show_log_droneMoves(self):
+        pass
+
+    def show_log_checkBox_alarmsTriggers(self):
+        pass
+
+    def show_log_checkBox_operatorActions(self):
+        pass
+
+    def show_log_checkBox_goalMessages(self):
+        pass
 
     def enable_set_zone_mode(self):
         """Включаем режим установки зоны и меняем курсор."""
@@ -203,11 +241,11 @@ class CopterApp(QMainWindow, Ui_MainWindow):
     def on_checkBox_showCopter(self, state):
         if state == Qt.Checked:
             self.pixmap_item.setVisible(True)
-            glogger.debug('Включена видимость коптера')
+            glogger.operator_actions('Enable copter vision')
 
         elif state == Qt.Unchecked:
             self.pixmap_item.setVisible(False)
-            glogger.debug('Отключена видимость коптера')
+            glogger.operator_actions('Disable copter vision')
 
     def on_checkBox_showRestrictedZone(self, state):
         """Обрабатывает состояние чекбокса 'Show Restricted Zone'."""
@@ -215,21 +253,21 @@ class CopterApp(QMainWindow, Ui_MainWindow):
             # Отображаем все полигоны запретных зон
             for polygon in self.restricted_zone_polygons:
                 polygon.setVisible(True)
-            glogger.debug('Включена видимость запретных зон')
+            glogger.operator_actions('Включена видимость запретных зон')
         else:
             # Скрываем все полигоны запретных зон
             for polygon in self.restricted_zone_polygons:
                 polygon.setVisible(False)
-            glogger.debug('Отключена видимость запретных зон')
+            glogger.operator_actions('Отключена видимость запретных зон')
 
     def on_checkBox_showDistance(self, state):
         """Обрабатывает изменение состояния чекбокса 'Show Distance to Nearest Restricted Zone'."""
         if state == Qt.Checked:
-            glogger.debug('Включен расчет дистанции до запретной зоны')
+            glogger.operator_actions('Включен расчет дистанции до запретной зоны')
             # Если чекбокс включен, обновляем визуализацию расстояния
             self.update_distance_visualization()
         else:
-            glogger.debug('Выключен расчет дистанции до запретной зоны')
+            glogger.operator_actions('Выключен расчет дистанции до запретной зоны')
             # Если чекбокс выключен, удаляем линию и текст
             if self.distance_line:
                 self.scene.removeItem(self.distance_line)
@@ -240,18 +278,18 @@ class CopterApp(QMainWindow, Ui_MainWindow):
 
     def on_checkBox_Warning(self, state):
         if state == Qt.Checked:
-            glogger.debug('Включено педупреждение при приближении к запреной зоне')
+            glogger.warning('Включено педупреждение при приближении к запреной зоне')
             self.warning_timer.start(2000)
         else:
-            glogger.debug('Отключено педупреждение при приближении к запреной зоне')
+            glogger.warning('Отключено педупреждение при приближении к запреной зоне')
             self.warning_timer.stop()
 
     def on_checkBox_stopInZone(self, state):
         if state == Qt.Checked:
-            glogger.debug('Enable stop when entering a restricted area')
+            glogger.alarms_and_triggers('Enable stop when entering a restricted area')
             self.stopInZone_timer.start(2000)
         else:
-            glogger.debug('Disabled stop when entering a restricted area')
+            glogger.alarms_and_triggers('Disabled stop when entering a restricted area')
             self.stopInZone_timer.stop()
 
     def stopInZone(self):
@@ -268,6 +306,7 @@ class CopterApp(QMainWindow, Ui_MainWindow):
 
     def warning_and_set_height(self, current_z):
         """Выводит предупреждающее окно и запрашивает новую высоту."""
+        glogger.warning('Entering a restricted area')
         # Предупреждающее окно
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Warning)
@@ -291,7 +330,6 @@ class CopterApp(QMainWindow, Ui_MainWindow):
             self.copter_controller.set_target_position([current_z, new_height, current_z])
             print(f"Установлена новая высота: {new_height:.2f} м")
 
-
     def follow_to_zone(self):
         """Проверяет расстояние до ближайшей зоны и выводит предупреждение, если нужно."""
         # Получаем координаты коптера
@@ -301,6 +339,7 @@ class CopterApp(QMainWindow, Ui_MainWindow):
 
         if self.nearest_point and self.distance_to_danger_zone < danger_zone_threshold:
             # Рассчитываем направление в градусах (от коптера до ближайшей точки)
+            glogger.warning('Approaching the restricted area')
             delta_x = self.nearest_point[0] - copter_coords[0]
             delta_y = self.nearest_point[1] - copter_coords[1]
             angle = degrees(atan2(delta_y, delta_x))  # Угол в градусах
