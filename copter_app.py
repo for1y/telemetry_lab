@@ -1,15 +1,20 @@
+from math import atan2, degrees
+
+from PyQt5 import QtGui
+from PyQt5.QtCore import Qt, QTimer, QPointF
+from PyQt5.QtGui import QPen, QColor, QPixmap, QCursor, QPolygonF, QTransform, QBrush
 from PyQt5.QtWidgets import QMainWindow, QGraphicsScene, QGraphicsTextItem, QGraphicsPixmapItem, QGraphicsPolygonItem, \
     QMenu, QMessageBox, QInputDialog
-from PyQt5.QtGui import QPen, QColor, QPixmap, QCursor, QPolygonF, QTransform, QBrush
-from PyQt5.QtCore import Qt, QTimer, QPointF
-from PyQt5 import QtGui
-from copter_class import CopterController  # , copter
-from math import atan2, degrees
+
+from copter_class import CopterController
 from interface import Ui_MainWindow
+
+from my_logger import logger as glogger
 
 cord_graph = 25
 scene_size = 200
 danger_zone_threshold = 10
+
 
 class CopterApp(QMainWindow, Ui_MainWindow):
     copter_controller = CopterController()
@@ -58,9 +63,11 @@ class CopterApp(QMainWindow, Ui_MainWindow):
         self.checkBox_Warning.stateChanged.connect(self.on_checkBox_Warning)
 
         self.checkBox_stopInZone.stateChanged.connect(self.on_checkBox_stopInZone)
+
         # Привязываем кнопки
         self.toolButton_setRestrictedZone.clicked.connect(self.enable_set_zone_mode)
         self.toolButton_setRoute.clicked.connect(self.set_route_to_copter)
+
         # Настраиваем таймер для обновления положения коптера
         self.timer = QTimer()
         self.timer.timeout.connect(self.draw_copter)
@@ -76,9 +83,7 @@ class CopterApp(QMainWindow, Ui_MainWindow):
         # self.scene.setSceneRect()
         self.draw_grid(int(self.cords_to_scene(1)), int(self.cords_to_scene(5)))
 
-    def gt(self):
-        copter_controller = CopterController()
-        copter_controller.update_copter_cords()
+
 
     def enable_set_zone_mode(self):
         """Включаем режим установки зоны и меняем курсор."""
@@ -198,9 +203,11 @@ class CopterApp(QMainWindow, Ui_MainWindow):
     def on_checkBox_showCopter(self, state):
         if state == Qt.Checked:
             self.pixmap_item.setVisible(True)
+            glogger.debug('Включена видимость коптера')
 
         elif state == Qt.Unchecked:
             self.pixmap_item.setVisible(False)
+            glogger.debug('Отключена видимость коптера')
 
     def on_checkBox_showRestrictedZone(self, state):
         """Обрабатывает состояние чекбокса 'Show Restricted Zone'."""
@@ -208,17 +215,21 @@ class CopterApp(QMainWindow, Ui_MainWindow):
             # Отображаем все полигоны запретных зон
             for polygon in self.restricted_zone_polygons:
                 polygon.setVisible(True)
+            glogger.debug('Включена видимость запретных зон')
         else:
             # Скрываем все полигоны запретных зон
             for polygon in self.restricted_zone_polygons:
                 polygon.setVisible(False)
+            glogger.debug('Отключена видимость запретных зон')
 
     def on_checkBox_showDistance(self, state):
         """Обрабатывает изменение состояния чекбокса 'Show Distance to Nearest Restricted Zone'."""
         if state == Qt.Checked:
+            glogger.debug('Включен расчет дистанции до запретной зоны')
             # Если чекбокс включен, обновляем визуализацию расстояния
             self.update_distance_visualization()
         else:
+            glogger.debug('Выключен расчет дистанции до запретной зоны')
             # Если чекбокс выключен, удаляем линию и текст
             if self.distance_line:
                 self.scene.removeItem(self.distance_line)
@@ -229,14 +240,18 @@ class CopterApp(QMainWindow, Ui_MainWindow):
 
     def on_checkBox_Warning(self, state):
         if state == Qt.Checked:
+            glogger.debug('Включено педупреждение при приближении к запреной зоне')
             self.warning_timer.start(2000)
         else:
+            glogger.debug('Отключено педупреждение при приближении к запреной зоне')
             self.warning_timer.stop()
 
     def on_checkBox_stopInZone(self, state):
         if state == Qt.Checked:
+            glogger.debug('Enable stop when entering a restricted area')
             self.stopInZone_timer.start(2000)
         else:
+            glogger.debug('Disabled stop when entering a restricted area')
             self.stopInZone_timer.stop()
 
     def stopInZone(self):

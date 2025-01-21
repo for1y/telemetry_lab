@@ -1,11 +1,11 @@
 import random
-import asyncio
-from PyQt5.QtCore import QThread, pyqtSignal, QObject, QTimer
 import threading
 import time
-import psycopg2 as pg
-import requests
 from typing import List, Tuple
+import requests
+from PyQt5.QtCore import QObject
+
+from my_logger import logger as glogger
 
 """GLOBAL VARIABLES"""
 host = '192.168.2.134'
@@ -18,9 +18,10 @@ port_quad = '5007'
 
 
 
-class CopterController(QObject):
+class CopterController():
     cords = []
     def __init__(self, update_interval=1000):
+
         self.update_interval = update_interval
         # Координаты
         self.cords = self._get_cords()
@@ -35,8 +36,9 @@ class CopterController(QObject):
     def update_copter_cords(self):
         while self.running:
             cords = data_from_database('realtime_telemetry', 1)[0][2:5]
-            print(f'drone move to {cords}')
+
             self.cords = cords
+            glogger.info(f'Copter update cordinates on {cords}')
             time.sleep(2)
 
     def set_target_position(self, cords: List[float]) -> None:
@@ -46,16 +48,22 @@ class CopterController(QObject):
         response_imitation = True
         # if response.status_code == 200:
         if response_imitation:
+            glogger.info(f'set_target_position {cords} [SUCCESS]')
             print(f'[SUCCESS] set_target_position {cords}')
         else:
+            glogger.error(f'set_target_position {cords} [FAILURE]')
             print(f'[FAILURE] set_target_position {cords}')
 
     def block_swiching(self, block: bool):
         payload = {"block": block}
-        response = requests.post(f"{self.api_url}/block_switching", json=payload)
-        if response.status_code == 200:
+        # response = requests.post(f"{self.api_url}/block_switching", json=payload)
+        response_imitation = True
+        # if response.status_code == 200:
+        if response_imitation:
+            self.logger.info(f'block_swiching {block} [SUCCESS]')
             print(f'[SUCCESS] block_swiching {block}')
         else:
+            self.logger.error(f'block_swiching {block} [FAILURE]')
             print(f'[FAILURE] block_swiching {block}')
 
     def get_copter_telemetry(self, count_of_records):

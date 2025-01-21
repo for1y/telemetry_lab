@@ -1,9 +1,9 @@
 
-from copter_app import CopterApp
-
 import sys
 
 from PyQt5.QtWidgets import QApplication
+
+from copter_app import CopterApp
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
